@@ -4,11 +4,12 @@ This is based on the great article at: https://www.pentestpartners.com/security-
 
 I'm mostly just making this for my own use but if useful for others then great.
 
-# How to use
+# How to read from a protected NRF51
 
 * (first read the article above)
+* start OPENOCD with /usr/local/share/openocd/bin/openocd -f /usr/local/share/openocd/bin/../scripts/interface/stlink.cfg -f /usr/local/share/openocd/bin/../scripts/target/nrf51.cfg -c "init; reset init;"
 * run "rungdb"
-* inside the GDB shell run "dumpuicr" to save all the uicr registers to a bin file.  If you are cloning a device you'll want to use these later.
+* inside the GDB shell run "uicrtofile" to save all the uicr registers to a bin file.  If you are cloning a device you'll want to use these later.
 * run "dumpficr" to get a handy set of known memory values (when a device is protected most flash is not readable, but this is)
 
 using the values from dumpficr do the following sequence:
@@ -27,3 +28,13 @@ Based on the instruction address you found, the register used to contain the add
 Edit readout.py
 
 Run "python readout.py".  It will take about 30 minutes and will dump the entire 256KB of flash out of the device.
+
+# How to write that image to a new device
+
+```
+telnet localhost 4444
+reset halt 
+nrf51 mass_erase
+flash write_image dump.bin 0
+flash write_image uicr.bin 0x10001000
+```
