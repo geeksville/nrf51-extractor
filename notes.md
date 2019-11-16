@@ -52,3 +52,35 @@ Next step #2: reinstall the virgin image and re OTA upgrade to our transitional 
 Then dive into sdk9 bootloader source
 again to see if there is a way we can add an optional CRC to the files inside the zip - because it seems like something is probably flaky in their
 bluetooth download.
+
+Update #3
+did next step #1 try fixing just the messed up word in failed-upgrade.bin, to confirm it works.  Use bless binary editor.  DID WORK!  Therefore the problem is bit level corruption in the upload/flashing process.  
+
+Uploading with NRF Connect worked! our bootloader ran fine.  Trying a few more times after lunch.  Use following commands to revirginmotize the device:
+
+reset halt
+nrf51 mass_erase
+flash write_image /home/kevinh/development/nrf51-extractor/factory-sw102.bin 0
+flash write_image /home/kevinh/development/nrf51-extractor/factory-sw102-uicr-readable.bin 0x10001000
+reset run  
+
+Still fails sometimes: interestingly the bit error is always at the same address and same bit: 0x304.
+
+Test if supply voltage matters (i.e. not using just the little STLINK for power) - no
+
+The verify call to the bootloader over bluetooth succeeds, which means the CRC check of the bootloader+softdevice+MBR showed the bytes were
+correct.  But looking at the implementation of the old SDK9 bootloader the copy to the final location (not in the application portion of flash
+which they use as 'scratch') happens deep in the bowels of the softdevice/MBR.  And it occurs on the NEXT boot, presumbably because they can't
+write to the MBR while interrupts are running because to write flash first you have to erase pages, and 0xffffffff in your ARM vector table at
+address zero would crash things hard.  We don't have source for this 'secret' NordicSemi code, but I presume they copy a special copy routine to
+RAM and use that routine to erase and write the flash starting at address zero.
+
+It seems to me there is a bug in this (super old) copy routine.  And it is possibly timing/chip specific - one of my SW102s fails only 1 in 10
+times, the other fails about 50% of the time.  I bet since people so rarely update softdevices OTA (for good reason), Nordic just missed this
+bug.  
+
+In theory we could backport our entire app to the super old SDK9 (so we wouldn't need to update the soft device), but I think that is unwise because there has been a lot of bug fixes since that old release.  I think we pretty much need to stay on SDK12.
+
+So... Bad news: I don't think we can reliably do initial installs over bluetooth with the factory firmware.  Do ya'll think there is any value
+in me making end-user instructions for how to _try_ to run the update?  I'm on the fence - yes it would save some people from opening their unit
+but it would also cause user confusion when it doesn't work and we say "okay - now you need to use an STLINK"
